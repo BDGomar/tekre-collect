@@ -338,7 +338,7 @@ function RegisterScreen({ onToggle }) {
           }}>
             <Icons.Mic size={28} color="#fff" />
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: theme.text, margin: '0 0 4px' }}>Tékré</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: theme.text, margin: '0 0 4px' }}>Tékré collect</h1>
           <p style={{ fontSize: 14, color: theme.textSecondary, margin: 0 }}>Rejoins la collecte audio</p>
         </div>
 
