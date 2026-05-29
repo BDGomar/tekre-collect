@@ -1,8 +1,7 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, createContext, useContext } from 'react';
 
 const API = process.env.REACT_APP_API_URL || '';
 
-// Inject keyframe animations
 (() => {
   const id = 'tekre-styles';
   if (document.getElementById(id)) return;
@@ -53,7 +52,6 @@ const theme = {
   radiusSm: 10,
 };
 
-// SVG Icons
 const Icons = {
   Mic: ({ size = 24, color = '#fff' }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -109,6 +107,318 @@ const Icons = {
       <path d="M12 14H8a2 2 0 01-2-2V8a2 2 0 012-2h4M36 14h4a2 2 0 002-2V8a2 2 0 00-2-2h-4M18 32h12M20 32l-2 10M28 32l2 10M16 42h16" stroke={theme.orange} strokeWidth="1.8" strokeLinecap="round"/>
     </svg>
   ),
+  User: ({ size = 22, color = '#8E8E93' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="8" r="4" stroke={color} strokeWidth="1.8"/>
+      <path d="M4 21v-1a6 6 0 0112 0v1" stroke={color} strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  ),
+  Plus: ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <line x1="12" y1="5" x2="12" y2="19" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+      <line x1="5" y1="12" x2="19" y2="12" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  ),
+  Crown: ({ size = 16 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M4 20h16M4 20l3-14 5 6 5-6 3 14" stroke={theme.orange} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+};
+
+const AuthContext = createContext(null);
+
+function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('tk_token');
+    if (!token) { setAuthLoading(false); return; }
+    fetch(`${API}/api/profile`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => setUser(d.user))
+      .catch(() => localStorage.removeItem('tk_token'))
+      .finally(() => setAuthLoading(false));
+  }, []);
+
+  const login = useCallback(async (email, password) => {
+    const r = await fetch(`${API}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!r.ok) {
+      const e = await r.json();
+      throw new Error(e.message || e.errors?.email?.[0] || 'Email ou mot de passe incorrect.');
+    }
+    const d = await r.json();
+    localStorage.setItem('tk_token', d.token);
+    setUser(d.user);
+    return d.user;
+  }, []);
+
+  const register = useCallback(async (name, email, password) => {
+    const r = await fetch(`${API}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ name, email, password }),
+    });
+    if (!r.ok) {
+      const e = await r.json();
+      const msg = e.errors ? Object.values(e.errors).flat()[0] : 'Erreur lors de l\'inscription.';
+      throw new Error(msg);
+    }
+    const d = await r.json();
+    localStorage.setItem('tk_token', d.token);
+    setUser(d.user);
+    return d.user;
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('tk_token');
+    setUser(null);
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ user, authLoading, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
+}
+
+function apiFetch(path, options = {}) {
+  const token = localStorage.getItem('tk_token');
+  const headers = { Accept: 'application/json', ...options.headers };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(options.body);
+  }
+  return fetch(`${API}${path}`, { ...options, headers });
+}
+
+function LoginScreen({ onToggle }) {
+  const { login } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await login(email, password);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 380 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 16,
+            background: `linear-gradient(135deg, ${theme.orange}, ${theme.orangeDark})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px',
+          }}>
+            <Icons.Mic size={28} color="#fff" />
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: theme.text, margin: '0 0 4px' }}>Tékré collect</h1>
+          <p style={{ fontSize: 14, color: theme.textSecondary, margin: 0 }}>Connecte-toi pour contribuer</p>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{
+          background: theme.card, borderRadius: 20, padding: 24,
+          boxShadow: `0 2px 20px ${theme.shadow}`,
+        }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: theme.text, margin: '0 0 20px' }}>Connexion</h2>
+
+          {error && (
+            <div style={{
+              background: theme.orangeLight, color: theme.orange, fontSize: 13, fontWeight: 500,
+              padding: '10px 14px', borderRadius: theme.radiusSm, marginBottom: 16, textAlign: 'center',
+            }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: theme.textSecondary, display: 'block', marginBottom: 6 }}>
+              Email
+            </label>
+            <input
+              type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="exemple@email.com" required
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: theme.textSecondary, display: 'block', marginBottom: 6 }}>
+              Mot de passe
+            </label>
+            <input
+              type="password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••" required
+              style={inputStyle}
+            />
+          </div>
+
+          <button type="submit" disabled={loading} style={{
+            border: 'none', padding: '14px 0', borderRadius: 14, width: '100%',
+            background: `linear-gradient(135deg, ${theme.orange}, ${theme.orangeDark})`,
+            color: '#fff', fontSize: 16, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.7 : 1,
+            boxShadow: `0 4px 16px ${theme.orange + '55'}`,
+          }}>
+            {loading ? 'Connexion…' : 'Se connecter'}
+          </button>
+
+          <p style={{ textAlign: 'center', fontSize: 13, color: theme.textSecondary, marginTop: 16 }}>
+            Pas encore de compte ?{' '}
+            <button type="button" onClick={onToggle} style={{
+              border: 'none', background: 'none', color: theme.orange, fontWeight: 600, cursor: 'pointer',
+              fontSize: 13, padding: 0,
+            }}>
+              Créer un compte
+            </button>
+          </p>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function RegisterScreen({ onToggle }) {
+  const { register } = useAuth();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (password.length < 6) { setError('Le mot de passe doit faire au moins 6 caractères.'); return; }
+    setLoading(true);
+    try {
+      await register(name, email, password);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 380 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 16,
+            background: `linear-gradient(135deg, ${theme.orange}, ${theme.orangeDark})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px',
+          }}>
+            <Icons.Mic size={28} color="#fff" />
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: theme.text, margin: '0 0 4px' }}>Tékré</h1>
+          <p style={{ fontSize: 14, color: theme.textSecondary, margin: 0 }}>Rejoins la collecte audio</p>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{
+          background: theme.card, borderRadius: 20, padding: 24,
+          boxShadow: `0 2px 20px ${theme.shadow}`,
+        }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: theme.text, margin: '0 0 20px' }}>Inscription</h2>
+
+          {error && (
+            <div style={{
+              background: theme.orangeLight, color: theme.orange, fontSize: 13, fontWeight: 500,
+              padding: '10px 14px', borderRadius: theme.radiusSm, marginBottom: 16, textAlign: 'center',
+            }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: theme.textSecondary, display: 'block', marginBottom: 6 }}>
+              Pseudo
+            </label>
+            <input
+              type="text" value={name} onChange={e => setName(e.target.value)}
+              placeholder="Ton pseudo" required
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: theme.textSecondary, display: 'block', marginBottom: 6 }}>
+              Email
+            </label>
+            <input
+              type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="exemple@email.com" required
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: theme.textSecondary, display: 'block', marginBottom: 6 }}>
+              Mot de passe
+            </label>
+            <input
+              type="password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="Minimum 6 caractères" required minLength={6}
+              style={inputStyle}
+            />
+          </div>
+
+          <button type="submit" disabled={loading} style={{
+            border: 'none', padding: '14px 0', borderRadius: 14, width: '100%',
+            background: `linear-gradient(135deg, ${theme.orange}, ${theme.orangeDark})`,
+            color: '#fff', fontSize: 16, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.7 : 1,
+            boxShadow: `0 4px 16px ${theme.orange + '55'}`,
+          }}>
+            {loading ? 'Inscription…' : 'Créer mon compte'}
+          </button>
+
+          <p style={{ textAlign: 'center', fontSize: 13, color: theme.textSecondary, marginTop: 16 }}>
+            Déjà un compte ?{' '}
+            <button type="button" onClick={onToggle} style={{
+              border: 'none', background: 'none', color: theme.orange, fontWeight: 600, cursor: 'pointer',
+              fontSize: 13, padding: 0,
+            }}>
+              Se connecter
+            </button>
+          </p>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const inputStyle = {
+  width: '100%', padding: '12px 14px', borderRadius: theme.radiusSm, border: `1.5px solid ${theme.border}`,
+  fontSize: 15, color: theme.text, background: theme.surface, outline: 'none',
+  transition: 'border-color 0.2s',
 };
 
 function CircularProgress({ current, total }) {
@@ -122,31 +432,14 @@ function CircularProgress({ current, total }) {
   return (
     <div style={{ position: 'relative', width: 88, height: 88 }}>
       <svg width={88} height={88}>
-        <circle
-          cx="44" cy="44" r={normalizedRadius}
-          fill="none" stroke={theme.border} strokeWidth={stroke}
-        />
-        <circle
-          cx="44" cy="44" r={normalizedRadius}
-          fill="none" stroke={theme.orange} strokeWidth={stroke}
-          strokeDasharray={circum}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          transform="rotate(-90 44 44)"
-          style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-        />
+        <circle cx="44" cy="44" r={normalizedRadius} fill="none" stroke={theme.border} strokeWidth={stroke} />
+        <circle cx="44" cy="44" r={normalizedRadius} fill="none" stroke={theme.orange} strokeWidth={stroke}
+          strokeDasharray={circum} strokeDashoffset={offset} strokeLinecap="round"
+          transform="rotate(-90 44 44)" style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
       </svg>
-      <div style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        <span style={{ fontSize: 20, fontWeight: 800, color: theme.text, lineHeight: 1 }}>
-          {Math.round(pct * 100)}
-        </span>
-        <span style={{ fontSize: 10, fontWeight: 600, color: theme.textSecondary }}>
-          %
-        </span>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color: theme.text, lineHeight: 1 }}>{Math.round(pct * 100)}</span>
+        <span style={{ fontSize: 10, fontWeight: 600, color: theme.textSecondary }}>%</span>
       </div>
     </div>
   );
@@ -162,12 +455,10 @@ function WordCard({ word, current, total, onDone }) {
   const chunks = useRef([]);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
-  const animRef = useRef(null);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (animRef.current) cancelAnimationFrame(animRef.current);
     };
   }, []);
 
@@ -178,7 +469,7 @@ function WordCard({ word, current, total, onDone }) {
       const fd = new FormData();
       fd.append('word', word.word);
       fd.append('audio', blob, `${word.word.replace(/\s+/g, '_')}.webm`);
-      const res = await fetch(`${API}/api/collect/submit`, { method: 'POST', body: fd });
+      const res = await apiFetch('/api/collect/submit', { method: 'POST', body: fd });
       if (!res.ok) throw new Error(await res.text());
       setDoneAnim(true);
       setTimeout(() => { setDoneAnim(false); onDone(); }, 800);
@@ -235,9 +526,7 @@ function WordCard({ word, current, total, onDone }) {
       <div style={cardStyles.container}>
         <div style={{ textAlign: 'center', padding: '24px 0' }}>
           <Icons.Check size={56} />
-          <div style={{ fontSize: 18, fontWeight: 700, color: theme.green, marginTop: 12 }}>
-            Enregistré !
-          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: theme.green, marginTop: 12 }}>Enregistré !</div>
         </div>
       </div>
     );
@@ -247,7 +536,6 @@ function WordCard({ word, current, total, onDone }) {
 
   return (
     <div style={cardStyles.container}>
-      {/* Word section */}
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
         <div style={cardStyles.label}>PRONONCE CE MOT</div>
         <div style={cardStyles.word}>{word.word}</div>
@@ -259,23 +547,16 @@ function WordCard({ word, current, total, onDone }) {
 
       {error && <div style={cardStyles.error}>{error}</div>}
 
-      {/* Controls */}
       <div style={cardStyles.controls}>
         {!recording ? (
-          <button
-            onClick={startRecording}
-            disabled={uploading}
-            style={cardStyles.recordBtn}
-          >
+          <button onClick={startRecording} disabled={uploading} style={cardStyles.recordBtn}>
             {uploading ? (
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={cardStyles.spinner} />
-                Envoi en cours…
+                <span style={cardStyles.spinner} />Envoi en cours…
               </span>
             ) : (
               <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Icons.Mic size={22} />
-                Enregistrer
+                <Icons.Mic size={22} />Enregistrer
               </span>
             )}
           </button>
@@ -283,20 +564,11 @@ function WordCard({ word, current, total, onDone }) {
           <div style={cardStyles.recordingBox}>
             <div style={cardStyles.waveBox}>
               {barHeights.map((h, i) => (
-                <div
-                  key={i}
-                  style={{
-                    ...cardStyles.bar,
-                    height: h,
-                    animationDelay: `${i * 0.1}s`,
-                    opacity: 0.3 + (i % 3) * 0.35,
-                  }}
-                />
+                <div key={i} style={{ ...cardStyles.bar, height: h, animationDelay: `${i * 0.1}s`, opacity: 0.3 + (i % 3) * 0.35 }} />
               ))}
             </div>
             <button onClick={stopRecording} style={cardStyles.stopBtn}>
-              <Icons.Stop size={18} />
-              Arrêter
+              <Icons.Stop size={18} />Arrêter
             </button>
             {countdown !== null && (
               <div style={cardStyles.countdown}>
@@ -311,133 +583,38 @@ function WordCard({ word, current, total, onDone }) {
 }
 
 const cardStyles = {
-  container: {
-    background: theme.card,
-    borderRadius: 20,
-    padding: '28px 24px',
-    boxShadow: `0 2px 20px ${theme.shadow}`,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: theme.textTertiary,
-    letterSpacing: '0.08em',
-    marginBottom: 10,
-  },
-  word: {
-    fontSize: 26,
-    fontWeight: 700,
-    color: theme.text,
-    lineHeight: 1.3,
-    marginBottom: 8,
-  },
-  count: {
-    fontSize: 13,
-    color: theme.textSecondary,
-  },
-  error: {
-    background: theme.orangeLight,
-    color: theme.orange,
-    fontSize: 13,
-    fontWeight: 500,
-    padding: '10px 14px',
-    borderRadius: theme.radiusSm,
-    marginBottom: 18,
-    textAlign: 'center',
-  },
-  controls: {
-    display: 'flex',
-    justifyContent: 'center',
-  },
-  recordBtn: {
-    border: 'none',
-    padding: '16px 0',
-    borderRadius: 14,
-    background: `linear-gradient(135deg, ${theme.orange}, ${theme.orangeDark})`,
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 700,
-    cursor: 'pointer',
-    width: '100%',
-    boxShadow: `0 4px 16px ${theme.orange + '55'}`,
-    transition: 'transform 0.15s',
-  },
-  spinner: {
-    width: 18,
-    height: 18,
-    border: '2px solid rgba(255,255,255,0.3)',
-    borderTop: '2px solid #fff',
-    borderRadius: '50%',
-    animation: 'spin 0.7s linear infinite',
-  },
-  recordingBox: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 14,
-    width: '100%',
-  },
-  waveBox: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    height: 40,
-  },
-  bar: {
-    width: 4,
-    borderRadius: 2,
-    background: theme.orange,
-    animation: 'barWave 0.7s ease-in-out infinite alternate',
-  },
-  stopBtn: {
-    border: 'none',
-    padding: '14px 0',
-    borderRadius: 14,
-    background: theme.red,
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 700,
-    cursor: 'pointer',
-    width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    boxShadow: `0 4px 16px ${theme.red + '44'}`,
-  },
-  countdown: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    fontWeight: 500,
-  },
+  container: { background: theme.card, borderRadius: 20, padding: '28px 24px', boxShadow: `0 2px 20px ${theme.shadow}` },
+  label: { fontSize: 11, fontWeight: 700, color: theme.textTertiary, letterSpacing: '0.08em', marginBottom: 10 },
+  word: { fontSize: 26, fontWeight: 700, color: theme.text, lineHeight: 1.3, marginBottom: 8 },
+  count: { fontSize: 13, color: theme.textSecondary },
+  error: { background: theme.orangeLight, color: theme.orange, fontSize: 13, fontWeight: 500, padding: '10px 14px', borderRadius: theme.radiusSm, marginBottom: 18, textAlign: 'center' },
+  controls: { display: 'flex', justifyContent: 'center' },
+  recordBtn: { border: 'none', padding: '16px 0', borderRadius: 14, background: `linear-gradient(135deg, ${theme.orange}, ${theme.orangeDark})`, color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', width: '100%', boxShadow: `0 4px 16px ${theme.orange + '55'}`, transition: 'transform 0.15s' },
+  spinner: { width: 18, height: 18, border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid #fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' },
+  recordingBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, width: '100%' },
+  waveBox: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, height: 40 },
+  bar: { width: 4, borderRadius: 2, background: theme.orange, animation: 'barWave 0.7s ease-in-out infinite alternate' },
+  stopBtn: { border: 'none', padding: '14px 0', borderRadius: 14, background: theme.red, color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: `0 4px 16px ${theme.red + '44'}` },
+  countdown: { fontSize: 13, color: theme.textSecondary, fontWeight: 500 },
 };
 
-function TabBar({ active, onChange }) {
+function TabBar({ active, onChange, isAdmin }) {
   const tabs = [
     { key: 'record', icon: Icons.Home, label: 'Collecte' },
     { key: 'stats', icon: Icons.Stats, label: 'Progrès' },
-    { key: 'settings', icon: Icons.Settings, label: 'Réglages' },
+    { key: 'admin', icon: Icons.Sparkle, label: 'Admin', adminOnly: true },
+    { key: 'profile', icon: Icons.User, label: 'Profil' },
   ];
 
   return (
     <div style={tabStyles.bar}>
-      {tabs.map(t => {
+      {tabs.filter(t => !t.adminOnly || isAdmin).map(t => {
         const isActive = active === t.key;
         const Icon = t.icon;
         return (
-          <button
-            key={t.key}
-            onClick={() => onChange(t.key)}
-            style={tabStyles.tab}
-          >
-            <Icon active={isActive} />
-            <span style={{
-              fontSize: 10,
-              fontWeight: 600,
-              color: isActive ? theme.orange : theme.textTertiary,
-              marginTop: 4,
-            }}>
+          <button key={t.key} onClick={() => onChange(t.key)} style={tabStyles.tab}>
+            <Icon active={isActive} color={isActive ? theme.orange : theme.textTertiary} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? theme.orange : theme.textTertiary, marginTop: 4 }}>
               {t.label}
             </span>
             {isActive && <div style={tabStyles.indicator} />}
@@ -449,56 +626,20 @@ function TabBar({ active, onChange }) {
 }
 
 const tabStyles = {
-  bar: {
-    display: 'flex',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    background: theme.card,
-    borderRadius: 20,
-    padding: '6px 8px',
-    marginTop: 12,
-    marginBottom: 8,
-    boxShadow: `0 -2px 20px ${theme.shadow}`,
-  },
-  tab: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    padding: '8px 16px',
-    position: 'relative',
-    flex: 1,
-  },
-  indicator: {
-    position: 'absolute',
-    bottom: -2,
-    width: 20,
-    height: 3,
-    borderRadius: 2,
-    background: theme.orange,
-  },
+  bar: { display: 'flex', justifyContent: 'space-around', alignItems: 'center', background: theme.card, borderRadius: 20, padding: '6px 8px', marginTop: 12, marginBottom: 8, boxShadow: `0 -2px 20px ${theme.shadow}` },
+  tab: { display: 'flex', flexDirection: 'column', alignItems: 'center', border: 'none', background: 'none', cursor: 'pointer', padding: '8px 16px', position: 'relative', flex: 1 },
+  indicator: { position: 'absolute', bottom: -2, width: 20, height: 3, borderRadius: 2, background: theme.orange },
 };
 
-function StatsScreen({ doneWords, words, onBack }) {
+function StatsScreen({ words }) {
   const totalDone = words.reduce((s, w) => s + w.count, 0);
   const wordsWithMin = words.filter(w => w.done).length;
+
   return (
     <div style={{ padding: '24px 0' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button onClick={onBack} style={backBtn}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M19 12H5m0 0l6-6m-6 6l6 6" stroke={theme.text} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-        <span style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>Progrès</span>
-      </div>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: theme.text, margin: '0 0 20px' }}>Progrès</h2>
 
-      <div style={{
-        background: theme.card, borderRadius: 20, padding: 24,
-        boxShadow: `0 2px 20px ${theme.shadow}`, marginBottom: 16
-      }}>
+      <div style={{ background: theme.card, borderRadius: 20, padding: 24, boxShadow: `0 2px 20px ${theme.shadow}`, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: 20 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: theme.orange }}>{totalDone}</div>
@@ -515,44 +656,20 @@ function StatsScreen({ doneWords, words, onBack }) {
         </div>
       </div>
 
-      <div style={{
-        background: theme.card, borderRadius: 20, padding: 20,
-        boxShadow: `0 2px 20px ${theme.shadow}`,
-      }}>
+      <div style={{ background: theme.card, borderRadius: 20, padding: 20, boxShadow: `0 2px 20px ${theme.shadow}` }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: theme.textSecondary, letterSpacing: '0.05em', marginBottom: 14 }}>
           DÉTAIL PAR MOT
         </div>
         {words.map(w => (
-          <div key={w.word} style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
-            borderBottom: '1px solid ' + theme.border,
-          }}>
-            <div style={{
-              width: 24, height: 24, borderRadius: '50%',
-              background: w.done ? theme.greenLight : theme.orangeLight,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12,
-            }}>
+          <div key={w.word} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid ' + theme.border }}>
+            <div style={{ width: 24, height: 24, borderRadius: '50%', background: w.done ? theme.greenLight : theme.orangeLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>
               {w.done ? <Icons.Check size={14} /> : <span style={{ color: theme.orange }}>{w.count}</span>}
             </div>
-            <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: theme.text }}>
-              {w.word}
-            </span>
-            <div style={{
-              width: 60, height: 4, borderRadius: 2,
-              background: theme.border, overflow: 'hidden',
-            }}>
-              <div style={{
-                width: `${Math.min(100, (w.count / 15) * 100)}%`,
-                height: '100%',
-                borderRadius: 2,
-                background: w.done ? theme.green : theme.orange,
-                transition: 'width 0.5s ease',
-              }} />
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: theme.text }}>{w.word}</span>
+            <div style={{ width: 60, height: 4, borderRadius: 2, background: theme.border, overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(100, (w.count / 15) * 100)}%`, height: '100%', borderRadius: 2, background: w.done ? theme.green : theme.orange, transition: 'width 0.5s ease' }} />
             </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: w.done ? theme.green : theme.textSecondary, minWidth: 32, textAlign: 'right' }}>
-              {w.count}/15
-            </span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: w.done ? theme.green : theme.textSecondary, minWidth: 32, textAlign: 'right' }}>{w.count}/15</span>
           </div>
         ))}
       </div>
@@ -560,20 +677,185 @@ function StatsScreen({ doneWords, words, onBack }) {
   );
 }
 
-const backBtn = {
-  border: 'none', background: theme.card, cursor: 'pointer',
-  width: 40, height: 40, borderRadius: 12,
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  boxShadow: `0 2px 10px ${theme.shadow}`,
-};
+function ProfileScreen() {
+  const { user, logout } = useAuth();
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/api/leaderboard')
+      .then(r => r.json())
+      .then(d => setLeaderboard(d.leaderboard || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const userRank = leaderboard.findIndex(u => u.id === user?.id) + 1;
+
+  return (
+    <div style={{ padding: '24px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: theme.text, margin: 0 }}>Profil</h2>
+        <button onClick={logout} style={{
+          border: 'none', background: 'none', color: theme.red, fontWeight: 600, cursor: 'pointer', fontSize: 14, padding: 0,
+        }}>
+          Déconnexion
+        </button>
+      </div>
+
+      <div style={{ background: theme.card, borderRadius: 20, padding: 24, boxShadow: `0 2px 20px ${theme.shadow}`, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 14,
+            background: `linear-gradient(135deg, ${theme.orange}, ${theme.orangeDark})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icons.User size={24} color="#fff" />
+          </div>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: theme.text }}>{user?.name}</div>
+            <div style={{ fontSize: 13, color: theme.textSecondary }}>{user?.email}</div>
+            {user?.role === 'admin' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                <Icons.Crown size={14} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: theme.orange }}>Administrateur</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: theme.card, borderRadius: 20, padding: 24, boxShadow: `0 2px 20px ${theme.shadow}`, marginBottom: 16 }}>
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <div style={{ fontSize: 36, fontWeight: 800, color: theme.orange }}>{user?.points || 0}</div>
+          <div style={{ fontSize: 13, color: theme.textSecondary, fontWeight: 500 }}>Points</div>
+        </div>
+        {userRank > 0 && (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: theme.text }}>#{userRank}</div>
+            <div style={{ fontSize: 13, color: theme.textSecondary }}>sur {leaderboard.length}</div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ background: theme.card, borderRadius: 20, padding: 20, boxShadow: `0 2px 20px ${theme.shadow}` }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: theme.textSecondary, letterSpacing: '0.05em', marginBottom: 14 }}>
+          CLASSEMENT
+        </div>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 20, color: theme.textSecondary, fontSize: 14 }}>Chargement…</div>
+        ) : leaderboard.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 20, color: theme.textSecondary, fontSize: 14 }}>Aucun joueur pour l&apos;instant.</div>
+        ) : (
+          leaderboard.map((u, i) => (
+            <div key={u.id} style={{
+              display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
+              borderBottom: i < leaderboard.length - 1 ? `1px solid ${theme.border}` : 'none',
+            }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: i === 0 ? theme.orange : i === 1 ? theme.textTertiary : i === 2 ? '#CD7F32' : theme.border,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, color: i < 3 ? '#fff' : theme.textSecondary,
+              }}>
+                {i + 1}
+              </div>
+              <Icons.User size={16} color={theme.textSecondary} />
+              <span style={{ flex: 1, fontSize: 14, fontWeight: u.id === user?.id ? 700 : 500, color: u.id === user?.id ? theme.orange : theme.text }}>
+                {u.name} {u.id === user?.id && '(moi)'}
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: u.id === user?.id ? theme.orange : theme.text }}>
+                {u.points} pts
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminScreen({ onWordAdded }) {
+  const [newWord, setNewWord] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const addWord = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const res = await apiFetch('/api/collect/words', {
+        method: 'POST',
+        body: { word: newWord.trim() },
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || d.errors?.word?.[0] || 'Erreur');
+      setSuccess(`« ${d.word.word} » ajouté !`);
+      setNewWord('');
+      if (onWordAdded) onWordAdded();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: '24px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+        <Icons.Crown size={20} />
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: theme.text, margin: 0 }}>Administration</h2>
+      </div>
+
+      <div style={{ background: theme.card, borderRadius: 20, padding: 24, boxShadow: `0 2px 20px ${theme.shadow}` }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: theme.text, margin: '0 0 4px' }}>Ajouter un mot</h3>
+        <p style={{ fontSize: 13, color: theme.textSecondary, margin: '0 0 16px' }}>
+          Les nouveaux mots seront disponibles pour la collecte audio.
+        </p>
+
+        <form onSubmit={addWord}>
+          {error && (
+            <div style={{ background: theme.orangeLight, color: theme.orange, fontSize: 13, fontWeight: 500, padding: '10px 14px', borderRadius: theme.radiusSm, marginBottom: 12, textAlign: 'center' }}>
+              {error}
+            </div>
+          )}
+          {success && (
+            <div style={{ background: theme.greenLight, color: theme.green, fontSize: 13, fontWeight: 500, padding: '10px 14px', borderRadius: theme.radiusSm, marginBottom: 12, textAlign: 'center' }}>
+              {success}
+            </div>
+          )}
+          <input
+            type="text" value={newWord} onChange={e => setNewWord(e.target.value)}
+            placeholder="Nom du mot ou produit" required
+            style={inputStyle}
+          />
+          <button type="submit" disabled={loading || !newWord.trim()} style={{
+            marginTop: 12, border: 'none', padding: '12px 0', borderRadius: 14, width: '100%',
+            background: `linear-gradient(135deg, ${theme.orange}, ${theme.orangeDark})`,
+            color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+            opacity: loading || !newWord.trim() ? 0.6 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}>
+            {loading ? 'Ajout…' : <><Icons.Plus size={18} />Ajouter le mot</>}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
+  const { user, authLoading } = useAuth();
   const [words, setWords] = useState([]);
   const [doneWords, setDoneWords] = useState([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
   const [tab, setTab] = useState('record');
+  const [authScreen, setAuthScreen] = useState('login');
 
   const fetchWords = useCallback(async () => {
     setLoading(true);
@@ -594,6 +876,10 @@ export default function App() {
 
   useEffect(() => { fetchWords(); }, [fetchWords]);
 
+  useEffect(() => {
+    if (['admin', 'profile'].includes(tab) && !user) setTab('record');
+  }, [tab, user]);
+
   const handleDone = useCallback(() => {
     setDoneWords(prev => [...prev, words[index].word]);
     const next = index + 1;
@@ -603,31 +889,39 @@ export default function App() {
       const nextUndone = words.findIndex((w, i) => i > index && !w.done);
       setIndex(nextUndone >= 0 ? nextUndone : words.length);
     }
-  }, [index, words]);
+    fetchWords();
+  }, [index, words, fetchWords]);
 
   const undoneWords = words.filter(w => !w.done);
   const currentWord = words[index];
   const currentProgress = words.filter(w => w.count > 0).length;
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <Icons.Wave size={48} />
+          <div style={{ fontSize: 14, color: theme.textSecondary, marginTop: 16 }}>Chargement…</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    if (authScreen === 'register') return <RegisterScreen onToggle={() => setAuthScreen('login')} />;
+    return <LoginScreen onToggle={() => setAuthScreen('register')} />;
+  }
 
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
           <Icons.Wave size={48} />
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: theme.text, margin: '16px 0 4px' }}>
-            Tékré
-          </h1>
-          <p style={{ fontSize: 14, color: theme.textSecondary, margin: '0 0 24px' }}>
-            Collecte audio
-          </p>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: theme.text, margin: '16px 0 4px' }}>Tékré</h1>
+          <p style={{ fontSize: 14, color: theme.textSecondary, margin: '0 0 24px' }}>Collecte audio</p>
           <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
             {[0,1,2].map(i => (
-              <div key={i} style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: theme.orange,
-                animation: 'pulse 1.2s ease-in-out infinite',
-                animationDelay: `${i * 0.2}s`,
-              }} />
+              <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: theme.orange, animation: 'pulse 1.2s ease-in-out infinite', animationDelay: `${i * 0.2}s` }} />
             ))}
           </div>
         </div>
@@ -644,14 +938,12 @@ export default function App() {
             <line x1="12" y1="8" x2="12" y2="13" stroke={theme.red} strokeWidth="1.8" strokeLinecap="round"/>
             <circle cx="12" cy="16" r="1" fill={theme.red}/>
           </svg>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: theme.text, margin: '16px 0 8px' }}>
-            Connexion impossible
-          </h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: theme.text, margin: '16px 0 8px' }}>Connexion impossible</h2>
           <p style={{ fontSize: 14, color: theme.textSecondary, lineHeight: 1.5, margin: '0 auto 24px', maxWidth: 280 }}>
             {fetchError}
           </p>
           <p style={{ fontSize: 12, color: theme.textTertiary, margin: '0 0 16px' }}>
-            Assure-toi que <code style={{ background: theme.border, padding: '2px 6px', borderRadius: 4 }}>php artisan serve</code> tourne sur le port 8000
+            Assure-toi que le serveur est en ligne.
           </p>
           <button onClick={fetchWords} style={{
             border: 'none', padding: '14px 32px', borderRadius: 14,
@@ -669,15 +961,32 @@ export default function App() {
   if (tab === 'stats') {
     return (
       <div style={{ minHeight: '100vh', background: theme.bg, padding: '0 16px' }}>
-        <StatsScreen words={words} doneWords={doneWords} onBack={() => setTab('record')} />
-        <TabBar active={tab} onChange={setTab} />
+        <StatsScreen words={words} />
+        <TabBar active={tab} onChange={setTab} isAdmin={user?.role === 'admin'} />
+      </div>
+    );
+  }
+
+  if (tab === 'profile') {
+    return (
+      <div style={{ minHeight: '100vh', background: theme.bg, padding: '0 16px' }}>
+        <ProfileScreen />
+        <TabBar active={tab} onChange={setTab} isAdmin={user?.role === 'admin'} />
+      </div>
+    );
+  }
+
+  if (tab === 'admin' && user?.role === 'admin') {
+    return (
+      <div style={{ minHeight: '100vh', background: theme.bg, padding: '0 16px' }}>
+        <AdminScreen onWordAdded={fetchWords} />
+        <TabBar active={tab} onChange={setTab} isAdmin={true} />
       </div>
     );
   }
 
   return (
     <div style={{ minHeight: '100vh', background: theme.bg, padding: '0 16px', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
       <div style={{ paddingTop: 24, paddingBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -702,7 +1011,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Progress + stats row */}
         <div style={{
           background: theme.card, borderRadius: 20, padding: '16px 20px',
           boxShadow: `0 2px 20px ${theme.shadow}`,
@@ -724,25 +1032,14 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main card */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '8px 0' }}>
         {currentWord && !currentWord.done ? (
-          <WordCard
-            key={currentWord.word + doneWords.length}
-            word={currentWord}
-            current={doneWords.length + 1}
-            total={words.length}
-            onDone={handleDone}
-          />
+          <WordCard key={currentWord.word + doneWords.length} word={currentWord}
+            current={doneWords.length + 1} total={words.length} onDone={handleDone} />
         ) : (
-          <div style={{
-            background: theme.card, borderRadius: 20, padding: '40px 24px',
-            textAlign: 'center', boxShadow: `0 2px 20px ${theme.shadow}`,
-          }}>
+          <div style={{ background: theme.card, borderRadius: 20, padding: '40px 24px', textAlign: 'center', boxShadow: `0 2px 20px ${theme.shadow}` }}>
             <Icons.Trophy size={56} />
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: theme.text, margin: '16px 0 8px' }}>
-              Mission accomplie !
-            </h2>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: theme.text, margin: '16px 0 8px' }}>Mission accomplie !</h2>
             <p style={{ fontSize: 14, color: theme.textSecondary, lineHeight: 1.5, margin: '0 auto 20px', maxWidth: 280 }}>
               Tous les mots ont été enregistrés.{' '}
               {doneWords.length > 0 && `Tu as contribué avec ${doneWords.length} mot${doneWords.length > 1 ? 's' : ''} dans cette session.`}
@@ -759,8 +1056,9 @@ export default function App() {
         )}
       </div>
 
-      {/* Tab bar */}
-      <TabBar active={tab} onChange={setTab} />
+      <TabBar active={tab} onChange={setTab} isAdmin={user?.role === 'admin'} />
     </div>
   );
 }
+
+export { AuthProvider };
