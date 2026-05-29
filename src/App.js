@@ -632,7 +632,7 @@ function StatsScreen({ words }) {
               </div>
               <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: theme.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.word}</span>
               <div style={{ width: 48, height: 4, borderRadius: 2, background: theme.border, overflow: 'hidden', flexShrink: 0 }}>
-                <div style={{ width: `${Math.min(100, (w.count / 15) * 100)}%`, height: '100%', borderRadius: 2, background: w.done ? theme.green : theme.orange }} />
+                <div style={{ width: `${Math.min(100, (w.count / 5) * 100)}%`, height: '100%', borderRadius: 2, background: w.done ? theme.green : theme.orange }} />
               </div>
               <span style={{ fontSize: 11, fontWeight: 600, color: w.done ? theme.green : theme.textSecondary, minWidth: 28, textAlign: 'right', flexShrink: 0 }}>{w.count}/15</span>
             </div>
