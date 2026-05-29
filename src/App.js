@@ -420,7 +420,7 @@ function CircularProgress({ current, total }) {
   );
 }
 
-function WordCard({ word, current, total, onDone }) {
+function WordCard({ word, onDone }) {
   const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
@@ -430,6 +430,8 @@ function WordCard({ word, current, total, onDone }) {
   const chunks = useRef([]);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
+
+  const userCount = word.user_count || 0;
 
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
@@ -445,7 +447,7 @@ function WordCard({ word, current, total, onDone }) {
       const res = await apiFetch('/api/collect/submit', { method: 'POST', body: fd });
       if (!res.ok) throw new Error(await res.text());
       setDoneAnim(true);
-      setTimeout(() => { setDoneAnim(false); onDone(); }, 800);
+      setTimeout(() => { setDoneAnim(false); onDone(); }, 600);
     } catch (_) {
       setError('Erreur lors de l\'envoi.');
     } finally {
@@ -487,11 +489,17 @@ function WordCard({ word, current, total, onDone }) {
   }, [uploadAudio, stopRecording]);
 
   if (doneAnim) {
+    const nextCount = userCount + 1;
     return (
       <div style={cardStyles.container}>
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
           <Icons.Check size={48} />
-          <div style={{ fontSize: 16, fontWeight: 700, color: theme.green, marginTop: 10 }}>Enregistré !</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: theme.green, marginTop: 10 }}>
+            {nextCount}/{3}
+          </div>
+          <div style={{ fontSize: 13, color: theme.textSecondary, marginTop: 2 }}>
+            {nextCount >= 3 ? 'Mot complété !' : 'Continue…'}
+          </div>
         </div>
       </div>
     );
@@ -506,7 +514,7 @@ function WordCard({ word, current, total, onDone }) {
         <div style={cardStyles.word}>{word.word}</div>
         <div style={cardStyles.count}>
           <span style={{ color: theme.orange }}>●</span>
-          {' '}{word.count} enregistrement{word.count > 1 ? 's' : ''}
+          {' '}{userCount}/3 enregistrement{userCount > 1 ? 's' : ''}
         </div>
       </div>
 
@@ -521,7 +529,7 @@ function WordCard({ word, current, total, onDone }) {
               </span>
             ) : (
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icons.Mic size={20} />Enregistrer
+                <Icons.Mic size={20} />Enregistrer{userCount > 0 ? ` (${userCount}/3)` : ''}
               </span>
             )}
           </button>
@@ -597,7 +605,7 @@ const tabStyles = {
 
 function StatsScreen({ words }) {
   const totalDone = words.reduce((s, w) => s + w.count, 0);
-  const wordsWithMin = words.filter(w => w.done).length;
+  const wordsWithMin = words.filter(w => w.user_done).length;
 
   return (
     <div>
@@ -627,14 +635,14 @@ function StatsScreen({ words }) {
         <div>
           {words.map(w => (
             <div key={w.word} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid ' + theme.border }}>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: w.done ? theme.greenLight : theme.orangeLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, flexShrink: 0 }}>
-                {w.done ? <Icons.Check size={12} /> : <span style={{ color: theme.orange }}>{w.count}</span>}
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: w.user_done ? theme.greenLight : theme.orangeLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, flexShrink: 0 }}>
+                {w.user_done ? <Icons.Check size={12} /> : <span style={{ color: theme.orange }}>{w.user_count}/3</span>}
               </div>
               <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: theme.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.word}</span>
-              <div style={{ width: 48, height: 4, borderRadius: 2, background: theme.border, overflow: 'hidden', flexShrink: 0 }}>
-                <div style={{ width: `${Math.min(100, (w.count / 5) * 100)}%`, height: '100%', borderRadius: 2, background: w.done ? theme.green : theme.orange }} />
+              <div style={{ width: 64, height: 4, borderRadius: 2, background: theme.border, overflow: 'hidden', flexShrink: 0 }}>
+                <div style={{ width: `${Math.min(100, (w.user_count / 3) * 100)}%`, height: '100%', borderRadius: 2, background: w.user_done ? theme.green : theme.orange }} />
               </div>
-              <span style={{ fontSize: 11, fontWeight: 600, color: w.done ? theme.green : theme.textSecondary, minWidth: 28, textAlign: 'right', flexShrink: 0 }}>{w.count}/15</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: w.user_done ? theme.green : theme.textSecondary, minWidth: 28, textAlign: 'right', flexShrink: 0 }}>{w.user_count}/3</span>
             </div>
           ))}
         </div>
@@ -792,7 +800,6 @@ function AdminScreen({ onWordAdded }) {
 export default function App() {
   const { user, authLoading } = useAuth();
   const [words, setWords] = useState([]);
-  const [doneWords, setDoneWords] = useState([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -800,43 +807,44 @@ export default function App() {
   const [authScreen, setAuthScreen] = useState('login');
 
   const fetchWords = useCallback(async () => {
-    setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch(`${API}/api/collect/words`);
+      const res = await apiFetch('/api/collect/words');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       setWords(d.words);
-      const firstUndone = d.words.findIndex(w => !w.done);
-      setIndex(firstUndone >= 0 ? firstUndone : d.words.length);
+      return d.words;
     } catch (e) {
       setFetchError(`Impossible de joindre le serveur (${e.message}).`);
-    } finally {
-      setLoading(false);
+      return [];
     }
   }, []);
 
-  useEffect(() => { fetchWords(); }, [fetchWords]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchWords().then(w => {
+      if (cancelled) return;
+      const firstPending = w.findIndex(x => !x.user_done);
+      setIndex(firstPending >= 0 ? firstPending : w.length);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [fetchWords]);
 
   useEffect(() => {
     if (['admin', 'profile'].includes(tab) && !user) setTab('record');
   }, [tab, user]);
 
-  const handleDone = useCallback(() => {
-    setDoneWords(prev => [...prev, words[index].word]);
-    const next = index + 1;
-    if (next < words.length && !words[next].done) {
-      setIndex(next);
-    } else {
-      const nextUndone = words.findIndex((w, i) => i > index && !w.done);
-      setIndex(nextUndone >= 0 ? nextUndone : words.length);
-    }
-    fetchWords();
-  }, [index, words, fetchWords]);
+  const handleSubmitDone = useCallback(async () => {
+    const freshWords = await fetchWords();
+    if (freshWords.length === 0) return;
+    const nextIdx = freshWords.findIndex(w => !w.user_done);
+    setIndex(nextIdx >= 0 ? nextIdx : freshWords.length);
+  }, [fetchWords]);
 
-  const undoneWords = words.filter(w => !w.done);
   const currentWord = words[index];
-  const currentProgress = words.filter(w => w.count > 0).length;
+  const wordsUserDone = words.filter(w => w.user_done).length;
 
   if (authLoading) {
     return (
@@ -936,27 +944,26 @@ export default function App() {
           </div>
           <div style={{ background: theme.card, borderRadius: 8, padding: '3px 10px 3px 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
             <Icons.Sparkle />
-            <span style={{ fontSize: 11, fontWeight: 700, color: theme.orange }}>{currentProgress}/{words.length}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: theme.orange }}>{wordsUserDone}/{words.length}</span>
           </div>
         </div>
 
         <div style={{ background: theme.card, borderRadius: 16, padding: '14px 16px', boxShadow: `0 2px 20px ${theme.shadow}`, display: 'flex', alignItems: 'center', gap: 16 }}>
-          <CircularProgress current={currentProgress} total={words.length} />
+          <CircularProgress current={wordsUserDone} total={words.length} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, marginBottom: 2 }}>
-              {undoneWords.length > 0 ? `Il reste ${undoneWords.length} mot${undoneWords.length > 1 ? 's' : ''}` : 'Mission accomplie !'}
+              {currentWord && !currentWord.user_done ? `Il reste ${words.length - wordsUserDone} mot${words.length - wordsUserDone > 1 ? 's' : ''}` : 'Mission accomplie !'}
             </div>
             <div style={{ fontSize: 12, color: theme.textSecondary, lineHeight: 1.3 }}>
-              {undoneWords.length > 0 ? 'Continue à enregistrer.' : 'Tous les mots ont assez d\'échantillons. Merci !'}
+              {currentWord && !currentWord.user_done ? 'Continue à enregistrer (3 fois par mot).' : 'Tous les mots ont été enregistrés. Merci !'}
             </div>
           </div>
         </div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '6px 0' }}>
-        {currentWord && !currentWord.done ? (
-          <WordCard key={currentWord.word + doneWords.length} word={currentWord}
-            current={doneWords.length + 1} total={words.length} onDone={handleDone} />
+        {currentWord && !currentWord.user_done ? (
+          <WordCard word={currentWord} onDone={handleSubmitDone} />
         ) : (
           <div style={{ background: theme.card, borderRadius: 16, padding: '32px 20px', textAlign: 'center', boxShadow: `0 2px 20px ${theme.shadow}` }}>
             <Icons.Trophy size={48} />
