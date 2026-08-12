@@ -3,7 +3,7 @@ import { useState, useRef, useCallback, useEffect, createContext, useContext } f
 const API = process.env.REACT_APP_API_URL || '';
 
 (() => {
-  const id = 'tekre-styles';
+  const id = 'sadp-collect-styles';
   if (document.getElementById(id)) return;
   const s = document.createElement('style');
   s.id = id;
@@ -238,10 +238,10 @@ function LoginScreen({ onToggle }) {
     <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
       <div style={{ width: '100%', maxWidth: 360 }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="Tékré"
+          <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="SADP Collect"
             style={{ width: 64, height: 64, borderRadius: 16, objectFit: 'cover', background: '#fff', padding: 4, boxShadow: `0 2px 20px ${theme.shadow}`, margin: '0 auto 14px', display: 'block' }} />
 
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: theme.text, margin: '0 0 4px' }}>Tékré</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: theme.text, margin: '0 0 4px' }}>SADP Collect</h1>
           <p style={{ fontSize: 13, color: theme.textSecondary, margin: 0 }}>Connecte-toi pour contribuer</p>
         </div>
 
@@ -324,11 +324,11 @@ function RegisterScreen({ onToggle }) {
     <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
       <div style={{ width: '100%', maxWidth: 360 }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="Tékré"
+          <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="SADP Collect"
             style={{ width: 64, height: 64, borderRadius: 16, objectFit: 'cover', background: '#fff', padding: 4, boxShadow: `0 2px 20px ${theme.shadow}`, margin: '0 auto 14px', display: 'block' }} />
 
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: theme.text, margin: '0 0 4px' }}>Tékré</h1>
-          <p style={{ fontSize: 13, color: theme.textSecondary, margin: 0 }}>Rejoins la collecte audio</p>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: theme.text, margin: '0 0 4px' }}>SADP Collect</h1>
+          <p style={{ fontSize: 13, color: theme.textSecondary, margin: 0 }}>Rejoins SADP Collect</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{
@@ -839,7 +839,7 @@ export default function App() {
   if (authLoading) {
     return (
       <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="Tékré"
+        <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="SADP Collect"
           style={{ width: 56, height: 56, borderRadius: 14, objectFit: 'cover', background: '#fff', padding: 4 }} />
       </div>
     );
@@ -854,9 +854,9 @@ export default function App() {
     return (
       <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
-          <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="Tékré"
+          <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="SADP Collect"
             style={{ width: 72, height: 72, borderRadius: 18, objectFit: 'cover', background: '#fff', padding: 6 }} />
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: theme.text, margin: '12px 0 4px' }}>Tékré</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: theme.text, margin: '12px 0 4px' }}>SADP Collect</h1>
           <p style={{ fontSize: 13, color: theme.textSecondary, margin: '0 0 20px' }}>Collecte audio</p>
           <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
             {[0,1,2].map(i => (
@@ -929,9 +929,9 @@ export default function App() {
       <div style={{ paddingTop: 20, paddingBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="Tékré"
+            <img src={`${process.env.PUBLIC_URL}/logo.jpg`} alt="SADP Collect"
               style={{ width: 34, height: 34, borderRadius: 10, objectFit: 'cover', background: '#fff', padding: 2 }} />
-            <span style={{ fontSize: 18, fontWeight: 800, color: theme.text }}>Tékré</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: theme.text }}>SADP Collect</span>
           </div>
           <div style={{ background: theme.card, borderRadius: 8, padding: '3px 10px 3px 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
             <Icons.Sparkle />
